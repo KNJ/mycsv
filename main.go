@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -12,10 +13,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	configFilePath = flag.String("c", "mycsv.yml", "config file path")
+	destDir        = flag.String("d", "export", "export destination directory")
+)
+
 // DataConfig ...
 type DataConfig struct {
 	Tables map[string]TableOptions
-	Dest   string
 }
 
 // TableOptions ...
@@ -27,11 +32,13 @@ type TableOptions struct {
 }
 
 func main() {
+	flag.Parse()
+
 	if err := loadDBConfig(); err != nil {
 		log.Fatal("[error] failed to load database config: ", err)
 	}
 
-	conf, err := loadDataConfig()
+	conf, err := loadDataConfig(*configFilePath)
 	if err != nil {
 		log.Fatal("[error] failed to load data config: ", err)
 	}
@@ -67,7 +74,7 @@ func main() {
 			NullString: "\\N",
 		}
 		fmt.Printf("exporting %s ... ", tbl)
-		if err = client.ExportTable(q, opts.Chunk, tbl, conf.Dest, cnv); err != nil {
+		if err = client.ExportTable(q, opts.Chunk, tbl, *destDir, cnv); err != nil {
 			fmt.Print("\n")
 			log.Fatal("[error] failed to export data: ", err)
 		}
@@ -84,8 +91,8 @@ func loadDBConfig() error {
 	return nil
 }
 
-func loadDataConfig() (*DataConfig, error) {
-	b, err := os.ReadFile("config.yml")
+func loadDataConfig(p string) (*DataConfig, error) {
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
