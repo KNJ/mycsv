@@ -25,10 +25,17 @@ type DataConfig struct {
 
 // TableOptions ...
 type TableOptions struct {
-	Transform map[string]string
+	Transform map[string]interface{}
 	Where     string
 	Limit     uint64
 	Chunk     uint64
+}
+
+// TransformConfig ...
+type TransformConfig struct {
+	Type  string
+	Value string
+	Args  []string
 }
 
 func main() {
@@ -69,7 +76,11 @@ func main() {
 			fmt.Printf("[warn] failed to get column names: %v\n", err)
 			continue
 		}
-		q := buildQuery(tbl, cols, &opts)
+		q, err := buildQuery(tbl, cols, &opts)
+		if err != nil {
+			fmt.Printf("[warn] failed to build query for `%s` table: %v\n", tbl, err)
+			continue
+		}
 		cnv := converter.CSVConverter{
 			NullString: "\\N",
 		}
@@ -105,8 +116,9 @@ func loadDataConfig(p string) (*DataConfig, error) {
 	return conf, nil
 }
 
-func buildQuery(tbl string, cols []string, opts *TableOptions) string {
+func buildQuery(tbl string, cols []string, opts *TableOptions) (string, error) {
 	var (
+		tc        TransformConfig
 		q         string
 		selectExp string
 	)
@@ -114,7 +126,30 @@ func buildQuery(tbl string, cols []string, opts *TableOptions) string {
 	for i, col := range cols {
 		field := fmt.Sprintf("`%s`", col)
 		if v, ok := opts.Transform[col]; ok == true {
-			field = fmt.Sprintf("%s as %s", v, field)
+			b, err := yaml.Marshal(v)
+			if err == nil {
+				yaml.Unmarshal(b, &tc)
+			}
+			if tc.Type != "" {
+				switch tc.Type {
+				case "raw":
+					field = fmt.Sprintf("%s as %s", tc.Value, field)
+				case "string":
+					field = fmt.Sprintf("'%s' as %s", tc.Value, field)
+				case "function":
+					field = fmt.Sprintf("%s as %s", buildFuncStr(tc.Value, tc.Args), field)
+				case "preset":
+					funcStr, err := buildFuncStrByPreset(tc.Value, tc.Args)
+					if err != nil {
+						return "", fmt.Errorf("invalid parameters: %w", err)
+					}
+					field = fmt.Sprintf("%s as %s", funcStr, field)
+				default:
+					return "", fmt.Errorf(`transform type "%s" is invalid`, tc.Type)
+				}
+			} else {
+				field = fmt.Sprintf("%s as %s", v, field)
+			}
 		}
 		if i != 0 {
 			selectExp += fmt.Sprintf(", %s", field)
@@ -133,5 +168,30 @@ func buildQuery(tbl string, cols []string, opts *TableOptions) string {
 		q += fmt.Sprintf(" limit %d", opts.Limit)
 	}
 
-	return q
+	return q, nil
+}
+
+func buildFuncStr(name string, args []string) string {
+	funcStr := fmt.Sprintf("%s(", name)
+	for i, arg := range args {
+		funcStr += arg
+		if i != len(args)-1 {
+			funcStr += ","
+		}
+	}
+	funcStr += ")"
+	return funcStr
+}
+
+func buildFuncStrByPreset(name string, args []string) (string, error) {
+	switch name {
+	case "if_not_empty":
+		if len(args) < 2 {
+			return "", fmt.Errorf(`preset "if_not_empty" requires 2 arguments`)
+		}
+		funcStr := fmt.Sprintf("if(bit_length(%s),%s,%s)", args[0], args[1], args[0])
+		return funcStr, nil
+	}
+
+	return "", fmt.Errorf(`preset "%s" is not supported`, name)
 }
