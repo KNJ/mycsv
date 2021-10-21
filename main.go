@@ -118,7 +118,6 @@ func loadDataConfig(p string) (*DataConfig, error) {
 
 func buildQuery(tbl string, cols []string, opts *TableOptions) (string, error) {
 	var (
-		tc        TransformConfig
 		q         string
 		selectExp string
 	)
@@ -126,6 +125,7 @@ func buildQuery(tbl string, cols []string, opts *TableOptions) (string, error) {
 	for i, col := range cols {
 		field := fmt.Sprintf("`%s`", col)
 		if v, ok := opts.Transform[col]; ok == true {
+			var tc TransformConfig
 			b, err := yaml.Marshal(v)
 			if err == nil {
 				yaml.Unmarshal(b, &tc)
