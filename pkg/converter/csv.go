@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // CSVConverter ...
@@ -40,7 +41,8 @@ func (c CSVConverter) Process(rows *sql.Rows, w io.Writer) error {
 
 			byteArray, ok := rawVal.([]byte)
 			if ok {
-				val = string(byteArray)
+				strVal := string(byteArray)
+				val = strings.ReplaceAll(strVal, "\\", "\\\\")
 			} else {
 				val = rawVal
 			}
