@@ -16,6 +16,7 @@ import (
 var (
 	configFilePath = flag.String("c", "mycsv.yml", "config file path")
 	destDir        = flag.String("d", "export", "export destination directory")
+	dryRun         = flag.Bool("dry-run", false, "output raw queries and will not execute them")
 )
 
 // DataConfig ...
@@ -81,6 +82,12 @@ func main() {
 			fmt.Printf("[warn] failed to build query for `%s` table: %v\n", tbl, err)
 			continue
 		}
+
+		if *dryRun {
+			fmt.Printf("%s: %s\n", tbl, q)
+			continue
+		}
+
 		cnv := converter.CSVConverter{
 			NullString: "\\N",
 		}
